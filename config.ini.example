@@ -1,0 +1,11 @@
+[run_mode]
+test=True
+
+[3commas]
+key=
+secret=
+
+; Optional for error notifications
+[telegram]
+id=
+hash=
