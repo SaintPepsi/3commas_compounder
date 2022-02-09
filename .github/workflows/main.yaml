@@ -1,0 +1,23 @@
+name: Deploy lambda
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo content
+        uses: actions/checkout@main
+      - name: Deploy code to Lambda
+        uses: denzalman/lambda-python-action@v1.1.0
+        with:
+          lambda_layer_arn: "arn:aws:lambda:${{ secrets.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:layer:${{ secrets.AWS_LAMBDA_LAYER_NAME }}"
+          lambda_function_name: "${{ secrets.AWS_LAMBDA_FUNCTION_NAME }}"
+          lambda_region: "${{ secrets.AWS_REGION }}"
+          requirements_txt: "requirements.txt"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
