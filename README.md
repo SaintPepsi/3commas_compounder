@@ -26,5 +26,5 @@ Github secrets:
 
 
 ### How to use
-
-`cd` into this working directory `pipenv shell` > `pip install -r requirements.txt`
+`git clone` this repo. 
+`cd` into working directory `pipenv shell` > `pip install -r requirements.txt`
