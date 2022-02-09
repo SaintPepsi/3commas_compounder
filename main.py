@@ -530,10 +530,10 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
                 # BO:SO scale increase = remaining_deal_space / max_active_deals = 0.433
 
                 remainig_deal_space = potential_max_deals - bot_max_active_deals
-                logging.info('remainig_deal_space', remainig_deal_space)
+                logging.info(f'remainig_deal_space {remainig_deal_space}')
 
                 deal_bo_so_increase = remainig_deal_space / bot_max_active_deals
-                logging.info('deal_bo_so_increase', deal_bo_so_increase)
+                logging.info(f'deal_bo_so_increase {deal_bo_so_increase}')
 
                 valid_bo += bo * deal_bo_so_increase
                 valid_so += so * deal_bo_so_increase
@@ -545,10 +545,10 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
                 # remainig_deal_space = potential_max_deals - max_deals = 0.8
                 # BO:SO scale increase = remaining_deal_space / max_deals = 0.26
                 remainig_deal_space = potential_max_deals - floor_max_deals
-                logging.info('remainig_deal_space', remainig_deal_space)
+                logging.info(f'remainig_deal_space {remainig_deal_space}')
 
                 deal_bo_so_increase = remainig_deal_space / floor_max_deals
-                logging.info('deal_bo_so_increase', deal_bo_so_increase)
+                logging.info(f'deal_bo_so_increase {deal_bo_so_increase}')
 
                 valid_bo += bo * deal_bo_so_increase
                 valid_so += so * deal_bo_so_increase
