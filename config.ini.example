@@ -6,6 +6,5 @@ key=
 secret=
 
 ; Optional for error notifications
-[telegram]
-id=
-hash=
+[discord]
+webhook_url=
