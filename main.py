@@ -65,16 +65,21 @@ else:
     secrets_dict = parameter_dict_getter(secret_parameters_result)
 
 
-logger = logging.getLogger(__name__)
-# Write to logfile
-logging.basicConfig(level=logging.INFO,
-                    filename='logs/3commas_compounder.log',
-                    filemode='a',
-                    format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S'
-                    )
-# Also print in console
-logging.getLogger().addHandler(logging.StreamHandler())
+if len(logging.getLogger().handlers) > 0:
+    # The Lambda environment pre-configures a handler logging to stderr. If a handler is already configured,
+    # `.basicConfig` does not execute. Thus we set the level directly.
+    logging.getLogger().setLevel(logging.INFO)
+else:
+    logger = logging.getLogger(__name__)
+    # Write to logfile
+    logging.basicConfig(level=logging.INFO,
+                        filename='logs/3commas_compounder.log',
+                        filemode='a',
+                        format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s',
+                        datefmt='%d-%m-%Y %H:%M:%S'
+                        )
+    # Also print in console
+    logging.getLogger().addHandler(logging.StreamHandler())
 
 
 
@@ -525,10 +530,10 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
                 # BO:SO scale increase = remaining_deal_space / max_active_deals = 0.433
 
                 remainig_deal_space = potential_max_deals - bot_max_active_deals
-                print('remainig_deal_space', remainig_deal_space)
+                logging.info('remainig_deal_space', remainig_deal_space)
 
                 deal_bo_so_increase = remainig_deal_space / bot_max_active_deals
-                print('deal_bo_so_increase', deal_bo_so_increase)
+                logging.info('deal_bo_so_increase', deal_bo_so_increase)
 
                 valid_bo += bo * deal_bo_so_increase
                 valid_so += so * deal_bo_so_increase
@@ -540,10 +545,10 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
                 # remainig_deal_space = potential_max_deals - max_deals = 0.8
                 # BO:SO scale increase = remaining_deal_space / max_deals = 0.26
                 remainig_deal_space = potential_max_deals - floor_max_deals
-                print('remainig_deal_space', remainig_deal_space)
+                logging.info('remainig_deal_space', remainig_deal_space)
 
                 deal_bo_so_increase = remainig_deal_space / floor_max_deals
-                print('deal_bo_so_increase', deal_bo_so_increase)
+                logging.info('deal_bo_so_increase', deal_bo_so_increase)
 
                 valid_bo += bo * deal_bo_so_increase
                 valid_so += so * deal_bo_so_increase
