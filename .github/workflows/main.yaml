@@ -3,7 +3,7 @@ name: Deploy lambda
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   deploy:
