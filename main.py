@@ -10,6 +10,7 @@ import boto3
 
 # Parse/Read config.ini
 config = configparser.ConfigParser()
+bots_config_location = 'bot_config/bots.json'
 
 try:
     # Try to get config.ini if it's present then we can assume we are running locally.
@@ -20,6 +21,9 @@ except:
     # If config.ini run_mode doesn't work we are most likely running in AWS Lambda so we need to use the lambda config.
     config.read('config.lambda.ini')
     test_mode = config.get('run_mode', 'test')
+    bots_config_location = 'tmp/bots.json'
+    with open('tmp/bots.json', 'wb') as f:
+        boto3.client('s3').download_fileobj('3commas-compounder-data-bucket', 'bots.json', f)
     local = 'False'
 
 
@@ -421,7 +425,7 @@ def create_user_config(auto_config):
                 user_conf['accounts'][account_id]['currencies'][currency][bot_ids[0]]['allocation'] = 1.0
 
     # Write config to file
-    with open("bot_config/bots.json", "w") as outfile:
+    with open(bots_config_location, "w") as outfile:
         json.dump(user_conf, outfile, indent=4)
 
 
@@ -432,14 +436,18 @@ def check_user_config(config):
     '''
 
     # Check if the bots.json file exists, if not create it and prompt user
-    file_exists = exists('bot_config/bots.json')
+    file_exists = exists(bots_config_location)
+
     if not file_exists:
-        create_user_config(config)
-        notify_webhook('Could not find a `bots.json` file, please populate the newly created file.', 'ERROR')
+        if local == 'True':
+            create_user_config(config)
+            notify_webhook(f'Could not find a `bots.json` in {bots_config_location}, please populate the newly created file.', 'ERROR')
+        else:
+            notify_webhook(f'Could not find a `bots.json` in {bots_config_location}, please check s3 file download.', 'ERROR')
         return False
     # if bots.json file DOES exist, make sure it has all of the bot ids and all allocations are defined
     else:
-        with open("bot_config/bots.json", "r") as infile:
+        with open(bots_config_location, "r") as infile:
             user_config = json.load(infile)
             bot_ids = []
             for account_id in user_config['accounts']:
