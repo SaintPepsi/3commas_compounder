@@ -21,8 +21,8 @@ except:
     # If config.ini run_mode doesn't work we are most likely running in AWS Lambda so we need to use the lambda config.
     config.read('config.lambda.ini')
     test_mode = config.get('run_mode', 'test')
-    bots_config_location = 'tmp/bots.json'
-    with open('tmp/bots.json', 'wb') as f:
+    bots_config_location = '/tmp/bots.json'
+    with open('/tmp/bots.json', 'wb') as f:
         boto3.client('s3').download_fileobj('3commas-compounder-data-bucket', 'bots.json', f)
     local = 'False'
 
