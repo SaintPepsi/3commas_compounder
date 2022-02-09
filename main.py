@@ -587,14 +587,7 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
     # Send api requests to 3c to update the bot
     update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json)
 
-
-#
-if __name__ == "__main__":
-
-    # Startup telegram
-    # if not exists('/telegram/name.session'):
-    #     notify_webhook('TG Configured!', 'INFO')
-
+def compounder_start():
     # Get bot configs from 3c
     config = get_config()
     # Compare 3c live configs against user config (bots.json)
@@ -626,3 +619,11 @@ if __name__ == "__main__":
 
                 # Pass the settings to optimize function to find optimal BO:SO for allocation
                 optimize_bot(bot_id=bot_id, bot_json=bot_json, max_currency_allocated=max_currency_allocated, bot_max_active_deals=bot_max_active_deals)
+#
+if __name__ == "__main__":
+
+    # Startup telegram
+    # if not exists('/telegram/name.session'):
+    #     notify_webhook('TG Configured!', 'INFO')
+   compounder_start()
+
