@@ -620,6 +620,11 @@ def compounder_start():
                 # Pass the settings to optimize function to find optimal BO:SO for allocation
                 optimize_bot(bot_id=bot_id, bot_json=bot_json, max_currency_allocated=max_currency_allocated, bot_max_active_deals=bot_max_active_deals)
 #
+
+def request_handler(event, lambda_context):
+   compounder_start()
+
+
 if __name__ == "__main__":
 
     # Startup telegram
