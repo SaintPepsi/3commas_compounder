@@ -522,7 +522,7 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
     # Make sure the bot can actually use 1 or more deals
     if floor_max_deals >= 1:
         if bot_type == "Bot::MultiBot":
-            if potential_max_deals > bot_max_active_deals:
+            if potential_max_deals >= bot_max_active_deals:
                 # Potential max deals is greater than we want it to be (6), we need to increase BO:SO scale based on residual max deals
                 # max_active_deals = 6
                 # potential_max_deals = 8.6
