@@ -566,31 +566,17 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
     total_funds_used_by_bot = max_funds_per_deal_new_size * valid_mad
     logging.info(f'total_funds_used_by_bot: {total_funds_used_by_bot}')
 
+    # Round to max 8 the bo:so
+    valid_bo = round(valid_bo, 8)
+    valid_so = round(valid_so, 8)
 
-    ### OLD HebrewHammer:
-    # # calc_max_funds_per_deal is per deal, so divide max_currency_allocated by # deals (MAD)
-    # per_deal_allocation = max_currency_allocated / int(bot_json['mad'])
-    # logging.info(f'Optimizing for {bot_json["name"]} ({bot_id}) with max budget {max_currency_allocated} ({per_deal_allocation} per deal)')
-
-    # print('BOT TYPE:', bot_json['type'])
-    # # If not enough funds before optimizing, throw warning
-    # if max_funds_per_deal > per_deal_allocation:
-    #     notify_webhook(f'Not enough funds for minimal settings for {bot_json["name"]}', 'WARNING')
-    # else:
-    #     while max_funds_per_deal <= per_deal_allocation:
-    #         bo += currency_limits[1]
-    #         so = float(bo * boso_ratio)
-    #         max_funds_per_deal = calc_max_funds_per_deal(bo=bo, so=so, mstc=int(bot_json['mstc']), sos=float(bot_json['sos']),
-    #                                    os=float(bot_json['os']), ss=float(bot_json['ss']))
-    #         # Store working bo/so so we know what to give to api
-    #         if max_funds_per_deal <= per_deal_allocation:
-    #             valid_bo = bo
-    #             valid_so = so
-
-    logging.info(f'Optimal settings for {bot_json["name"]} ({bot_id}) found! BO: {round(valid_bo, 8)}, SO: {round(valid_so, 8)}, MAD: {valid_mad}')
-
-    # Send api requests to 3c to update the bot
-    update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json)
+    if float(bot_json['bo']) != valid_bo or float(bot_json['so']) != valid_so or bot_json['mad'] != valid_mad:
+        # Only Send api requests to 3c to update the bot if the data is different than what it was.
+        logging.info(f'Optimal settings for {bot_json["name"]} ({bot_id}) found! BO: {round(valid_bo, 8)}, SO: {round(valid_so, 8)}, MAD: {valid_mad}')
+        update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json)
+    else:
+        # Did not find newer settings
+        logging.info(f'Could not find new optimal settings for {bot_json["name"]} ({bot_id}).')
 
 def compounder_start():
     # Get bot configs from 3c
