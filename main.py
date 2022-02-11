@@ -11,6 +11,7 @@ import boto3
 # Parse/Read config.ini
 config = configparser.ConfigParser()
 bots_config_location = 'bot_config/bots.json'
+additional_headers={'Forced-Mode': 'real'}
 
 try:
     # Try to get config.ini if it's present then we can assume we are running locally.
@@ -84,9 +85,18 @@ else:
 
 
 # connect 3commas python wrapper
-py3cw_requst_options = {'request_timeout': 10, 'nr_of_retries': 1, 'retry_status_codes': [502]}
-p3cw = Py3CW(key=secrets_dict["3commas_key"], secret=secrets_dict["3commas_secret"],
-             request_options=py3cw_requst_options)
+additional_headers={'Forced-Mode': 'real'}
+
+py3cw_requst_options = {
+        'request_timeout': 10,
+        'nr_of_retries': 1,
+        'retry_status_codes': [502]
+    }
+p3cw = Py3CW(
+        key=secrets_dict["3commas_key"],
+        secret=secrets_dict["3commas_secret"],
+        request_options=py3cw_requst_options
+    )
 
 # Get telegram API ID + HASH from telegram API Development Tools
 # tg_api_id = str(config.get('telegram', 'id'))
@@ -103,6 +113,7 @@ def refresh_balances(account_id):
             entity='accounts',
             action='load_balances',
             action_id=f'{account_id}',
+            additional_headers=additional_headers
         )
 
     if error:
@@ -116,12 +127,16 @@ def get_3c_currency_limit(bot_json):
     :return: tuple with (min BO, min price step size). Uses lotStep instead of priceStep to ensure we are using multiples the coin can also be sold at
     '''
 
-    error, pair_limits = p3cw.request(entity='accounts',
-                                      action='currency_rates',
-                                      action_id='',
-                                      payload={"market_code": bot_json['market_code'],
-                                               "pair": bot_json['pairs'][0]}
-                                      )
+    error, pair_limits = p3cw.request(
+        entity='accounts',
+        action='currency_rates',
+        action_id='',
+        payload={
+            "market_code": bot_json['market_code'],
+            "pair": bot_json['pairs'][0]
+        },
+        additional_headers=additional_headers
+    )
 
     if error:
         notify_webhook(error, 'ERROR')
@@ -203,7 +218,8 @@ def update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json):
                 'strategy_list': bot_json['strategy_list'],
                 'bot_id': bot_id,
                 'max_active_deals': valid_mad,
-            }
+            },
+            additional_headers=additional_headers
         )
         if error == {}:
             logging.info(f"{bot_json['name']} Updated!")
@@ -269,7 +285,12 @@ def get_config():
             "limit": f"{bot_limit}",
             "offset":f"{bot_offset}"
         }
-        error, bots = p3cw.request(entity='bots', action='', payload=bot_fetch_payload)
+        error, bots = p3cw.request(
+            entity='bots',
+            action='',
+            payload=bot_fetch_payload,
+            additional_headers=additional_headers
+        )
 
         if error:
             notify_webhook(error, 'ERROR')
@@ -327,7 +348,12 @@ def get_config():
             # If currency not already in the account, add it
             config_dict['accounts'][account_id]['balances'][currency] = 0.0
             # Add market code so we can look up currency limits for that exchange later
-            error, account_info = p3cw.request(entity='accounts', action='account_info', action_id=str(account_id))
+            error, account_info = p3cw.request(
+                entity='accounts',
+                action='account_info',
+                action_id=str(account_id),
+                additional_headers=additional_headers
+            )
             if error:
                 notify_webhook(f'Error getting account info for [{bot["account_name"]}](https://3commas.io/accounts/{bot["account_id"]})', 'ERROR')
 
@@ -338,7 +364,15 @@ def get_config():
     for account_id in config_dict['accounts'].keys():
         # Refresh the balance 3c has for the exchange
         refresh_balances(account_id)
-        error, account_balances = p3cw.request(entity='accounts', action='account_table_data', action_id=str(account_id), payload={"account_id": account_id})
+        error, account_balances = p3cw.request(
+            entity='accounts',
+            action='account_table_data',
+            action_id=str(account_id),
+            payload={
+                "account_id": account_id
+            },
+            additional_headers=additional_headers
+        )
 
         if error:
             print(error)
@@ -361,8 +395,9 @@ def get_config():
                     "account_id": account_id,
                     "scope": "active",
                     "bot_id": bot_id
-                    }
-                )
+                },
+                additional_headers=additional_headers
+            )
             if error:
                 print(error)
                 notify_webhook(f'Error getting active deals for [{account_id}](https://3commas.io/accounts/{account_id})', 'ERROR')
