@@ -175,6 +175,7 @@ MESSAGE_TYPE_EMOJI = {
     'WARNING': '⚠️',
     'ERROR': '⛔'
 }
+
 MESSAGE_TYPE_COLOR = {
     'INFO': 3447003,
     'WARNING': 16776960,
@@ -182,15 +183,16 @@ MESSAGE_TYPE_COLOR = {
 }
 MESSAGE_TYPE_LOGGING = {
     'INFO': logging.info,
-    'WARNING': logging.error,
-    'ERROR': logging.warning
+    'WARNING': logging.warning,
+    'ERROR': logging.error
 }
 
 TEST_MODE_MESSAGE_DICT = {
     "False": " - ⚖️",
     "True": " - 🔧👷‍♂️🚧🏗️"
 }
-def notify_webhook(message, message_type):
+
+def notify_webhook(message, message_type: str):
     '''
     Helper function to send error messages to telegram
     :param message: message to send to webhook
@@ -210,7 +212,7 @@ def notify_webhook(message, message_type):
             {
                 "title": (
                     f'{MESSAGE_TYPE_EMOJI[message_type]} Compounder '
-                    f'{message_type}{TEST_MODE_MESSAGE_DICT[message_type]}'
+                    f'{message_type}{TEST_MODE_MESSAGE_DICT[LOCAL]}'
                 ),
                 "color": MESSAGE_TYPE_COLOR[message_type],
                 "description": message
