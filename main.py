@@ -44,7 +44,7 @@ def parameter_dict_getter(_secret_parameters_result):
     '''
     constructed_secrets_dict = {}
     for params in _secret_parameters_result["Parameters"]:
-        value_key = params["Name"].replace("/3commas-compounder/", "")
+        value_key = params["Name"].rsplit("/", maxsplit=1)[1]
         constructed_secrets_dict[value_key] = params["Value"]
     return constructed_secrets_dict
 
@@ -99,7 +99,7 @@ else:
 # connect 3commas python wrapper
 additional_headers={'Forced-Mode': 'real'}
 
-py3cw_requst_options = {
+py3cw_request_options = {
         'request_timeout': 10,
         'nr_of_retries': 1,
         'retry_status_codes': [502]
@@ -107,7 +107,7 @@ py3cw_requst_options = {
 p3cw = Py3CW(
         key=secrets_dict["3commas_key"],
         secret=secrets_dict["3commas_secret"],
-        request_options=py3cw_requst_options
+        request_options=py3cw_request_options
     )
 
 # Get telegram API ID + HASH from telegram API Development Tools

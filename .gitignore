@@ -2,3 +2,4 @@
 bots.json
 *.log
 test.py
+.mypy_cache
