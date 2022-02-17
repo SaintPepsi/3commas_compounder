@@ -623,8 +623,9 @@ def check_user_config(config):
                 if bot_id not in bot_ids:
                     notify_webhook(
                         (
-                            'bots.json is missing new bots. '
-                            'Please delete the file and re-run this script'
+                            "bots.json is missing new bots. "
+                            f"[{bot_id}](https://3commas.io/bots/{bot_id}) \n"
+                            "Please delete the file and re-run this script"
                         ),
                         'ERROR'
                     )
