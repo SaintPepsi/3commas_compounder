@@ -4,11 +4,11 @@
 
 import math
 import logging
-from py3cw.request import Py3CW
-import configparser
 import json
-import requests
+import configparser
 from os.path import exists
+from py3cw.request import Py3CW
+import requests
 # AWS
 import boto3
 
@@ -244,9 +244,11 @@ def update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json):
             payload={
                 'name': bot_json['name'],
                 'pairs': bot_json['pairs'],
-                'base_order_volume': f'{valid_bo}',  # this is auto calculated value that we're changing
+                # this is auto calculated value that we're changing
+                'base_order_volume': f'{valid_bo}',
                 'take_profit': bot_json['tp'],
-                'safety_order_volume': f'{valid_so}',  # this is auto calculated value that we're changing
+                # this is auto calculated value that we're changing
+                'safety_order_volume': f'{valid_so}',
                 'martingale_volume_coefficient': bot_json['os'],
                 'martingale_step_coefficient': bot_json['ss'],
                 'max_safety_orders': bot_json['mstc'],
@@ -675,7 +677,7 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
     if floor_max_deals >= 1:
         if bot_type == "Bot::MultiBot":
             if potential_max_deals >= bot_max_active_deals:
-                # Potential max deals is greater than we want it to be (6), 
+                # Potential max deals is greater than we want it to be (6),
                 # we need to increase BO:SO scale based on residual max deals
                 # max_active_deals = 6
                 # potential_max_deals = 8.6
@@ -685,7 +687,7 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
                 remainig_deal_space = potential_max_deals - bot_max_active_deals
 
                 deal_bo_so_increase = remainig_deal_space / bot_max_active_deals
-                
+
 
                 valid_bo += bo * deal_bo_so_increase
                 valid_so += so * deal_bo_so_increase
@@ -723,9 +725,10 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
             'WARNING'
         )
 
-    
 
-    max_funds_per_deal_new_size = calc_max_funds_per_deal(bo=valid_bo, so=valid_so, mstc=mstc, sos=sos, os=os, ss=ss)
+
+    max_funds_per_deal_new_size = \
+        calc_max_funds_per_deal(bo=valid_bo, so=valid_so, mstc=mstc, sos=sos, os=os, ss=ss)
     max_funds_per_deal_new_size_info = f'max_funds_per_deal_new_size: {max_funds_per_deal_new_size}'
     logging.info(max_funds_per_deal_new_size_info)
 
@@ -795,7 +798,7 @@ def compounder_start():
                 bot_allocation = user_conf_bot['allocation']
                 # check if bot has Max active deal, if it does use it otherwise set it to 1
                 if "max_active_deals" in user_conf_bot:
-                    bot_max_active_deals = user_conf_bot['max_active_deals'] 
+                    bot_max_active_deals = user_conf_bot['max_active_deals']
                 else:
                     bot_max_active_deals = 1
 
