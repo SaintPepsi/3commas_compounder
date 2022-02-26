@@ -495,18 +495,6 @@ def get_config():
                     strat_key = currency_amount[deal['strategy']]
                     config_dict_account_balances[currency_code] += float(deal[strat_key])
 
-    # DO NOT GRAB ALLL ACTIVE DEALS YOU WILL OVER EXTEND
-    # Add in deal balances to actual balances to get total funds in account
-    # for account_id in config_dict['accounts'].keys():
-    #     error, active_deals = p3cw.request(entity='deals', action='',
-    #                                     payload={"account_id": account_id, "scope": "active"})
-
-    #     for deal in active_deals:
-    #         # Get the currency the deal is getting 'bought' with
-    #         currency_code = get_currency(deal['pair'], deal['strategy'], deal['base_order_volume_type'])
-    #         # Add this amount to the balance already in the dict
-    #         if currency_code in config_dict['accounts'][account_id]['balances']:
-    #             config_dict['accounts'][account_id]['balances'][currency_code] += float(deal['bought_volume' if deal['strategy'] == 'long' else 'sold_amount'])
     return config_dict
 
 
