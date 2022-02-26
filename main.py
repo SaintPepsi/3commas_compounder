@@ -497,7 +497,6 @@ def get_config():
 
     return config_dict
 
-
 def create_user_config(auto_config):
     '''
     Creates bots.json file for user to input allocations
