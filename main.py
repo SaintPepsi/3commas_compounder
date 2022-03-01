@@ -544,7 +544,7 @@ def create_user_config(auto_config):
         json.dump(user_conf, outfile, indent=4)
 
 
-def check_user_config(user_config):
+def check_user_config(bot_user_config):
     '''
     Checks that the bots.json file is configured and has all necessary data for script to run
     :return: valid user config
@@ -555,7 +555,7 @@ def check_user_config(user_config):
 
     if not file_exists:
         if LOCAL == 'True':
-            create_user_config(user_config)
+            create_user_config(bot_user_config)
             notify_webhook(
                 (
                     f'Could not find a `bots.json` in {BOTS_CONFIG_LOCATION}, '
@@ -605,8 +605,8 @@ def check_user_config(user_config):
                     )
                     logging.warning(risk_factor_warning)
         # if there is a live bot that does not have a config in bots.json, break
-        for account_id in user_config['accounts']:
-            for bot_id in user_config['accounts'][account_id]['bots']:
+        for account_id in bot_user_config['accounts']:
+            for bot_id in bot_user_config['accounts'][account_id]['bots']:
                 if bot_id not in bot_ids:
                     notify_webhook(
                         (
