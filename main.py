@@ -676,7 +676,6 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
 
                 deal_bo_so_increase = remainig_deal_space / bot_max_active_deals
 
-
                 valid_bo += bo * deal_bo_so_increase
                 valid_so += so * deal_bo_so_increase
                 valid_mad = bot_max_active_deals
@@ -712,8 +711,6 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
             ),
             'WARNING'
         )
-
-
 
     max_funds_per_deal_new_size = \
         calc_max_funds_per_deal(bo=valid_bo, so=valid_so, mstc=mstc, sos=sos, os=os, ss=ss)
