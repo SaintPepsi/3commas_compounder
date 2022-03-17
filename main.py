@@ -745,6 +745,8 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
         )
         logging.info(no_optimal_found_info)
 
+
+
 def compounder_start():
     '''
     Compounder start method. this starts all the other
