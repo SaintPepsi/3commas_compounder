@@ -223,7 +223,7 @@ def notify_webhook(message, message_type: str):
     print(resp)
 
 
-def update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json):
+def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json):
     '''
     Helper function to hit the 3c api and update the bot's bo and so
     :param account_id: account id the bot is on
@@ -258,6 +258,7 @@ def update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json):
                 'strategy_list': bot_json['strategy_list'],
                 'bot_id': bot_id,
                 'max_active_deals': valid_mad,
+                'allowed_deals_on_same_pair': valid_adosp,
             },
             additional_headers=additional_headers
         )
@@ -392,6 +393,7 @@ def get_config():
             bot_config_dict['os'] = bot['martingale_volume_coefficient']
             bot_config_dict['ss'] = bot['martingale_step_coefficient']
             bot_config_dict['mad'] = bot['max_active_deals']
+            bot_config_dict['adosp'] = bot['allowed_deals_on_same_pair']
             bot_config_dict['sos'] = bot['safety_order_step_percentage']
             bot_config_dict['mstc'] = bot['max_safety_orders']
             bot_config_dict['pairs'] = bot['pairs']
@@ -620,7 +622,7 @@ def check_user_config(bot_user_config):
     return user_config
 
 
-def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals):
+def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals, bot_allow_same_pair_multiple):
     '''
     Helper function to find optimal bot settings and update 3c via api
     :param bot_id: 3c ID of the bot
@@ -649,6 +651,7 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
     valid_bo = bo
     valid_so = so
     valid_mad = 1
+    valid_adosp = 1
 
     ### 09-02-2022 SanCoca BO SO MAD optimiser
     bot_type = bot_json["type"]
@@ -724,19 +727,24 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals)
     # Round to max 8 the bo:so
     valid_bo = round(valid_bo, 8)
     valid_so = round(valid_so, 8)
+    # Scale max allowed deals per pair based on mad
+    if bot_allow_same_pair_multiple:
+        valid_adosp = math.ceil(valid_mad / 19)
+
 
     if (
         float(bot_json['bo']) != valid_bo or
         float(bot_json['so']) != valid_so or
-        bot_json['mad'] != valid_mad
+        bot_json['mad'] != valid_mad or
+        bot_json['adosp'] != valid_adosp
     ):
         # Only Send api requests to 3c to update the bot if the data is different than what it was.
         optimal_found_info = (
             f'Optimal settings for {bot_json["name"]} ({bot_id}) found! '
-            f'BO: {round(valid_bo, 8)}, SO: {round(valid_so, 8)}, MAD: {valid_mad}'
+            f'BO: {round(valid_bo, 8)}, SO: {round(valid_so, 8)}, MAD: {valid_mad}, ADOSP: {valid_adosp}'
         )
         logging.info(optimal_found_info)
-        update_bot(bot_id, valid_bo, valid_so, valid_mad, bot_json)
+        update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json)
     else:
         # Did not find newer settings
         no_optimal_found_info = (
@@ -784,11 +792,10 @@ def compounder_start():
 
                 bot_allocation = user_conf_bot['allocation']
                 # check if bot has Max active deal, if it does use it otherwise set it to 1
-                if "max_active_deals" in user_conf_bot:
-                    bot_max_active_deals = user_conf_bot['max_active_deals']
-                else:
-                    bot_max_active_deals = 1
+                bot_max_active_deals = 1 if not "max_active_deals" in user_conf_bot else user_conf_bot['max_active_deals']
 
+                # allow multiple deals with same pair
+                bot_allow_same_pair_multiple = False if not "allow_same_pair_multiple" in user_conf_bot else user_conf_bot['allow_same_pair_multiple']
 
                 max_currency_allocated = \
                     float(account_balances[bot_currency]) * float(bot_allocation)
@@ -804,7 +811,8 @@ def compounder_start():
                     bot_id=bot_id,
                     bot_json=bot_json,
                     max_currency_allocated=max_currency_allocated,
-                    bot_max_active_deals=bot_max_active_deals
+                    bot_max_active_deals=bot_max_active_deals,
+                    bot_allow_same_pair_multiple=bot_allow_same_pair_multiple
                 )
 #
 
