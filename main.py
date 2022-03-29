@@ -487,6 +487,9 @@ def get_config():
             )
             if error:
                 print(error)
+                if LOCAL is 'False' and forced_mode is 'paper':
+                    continue
+                
                 notify_webhook(
                     (
                         'Error getting active deals for:\n'
