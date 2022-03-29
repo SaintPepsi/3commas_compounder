@@ -97,8 +97,6 @@ else:
 
 
 # connect 3commas python wrapper
-additional_headers={'Forced-Mode': 'real'}
-
 py3cw_request_options = {
         'request_timeout': 10,
         'nr_of_retries': 1,
@@ -115,7 +113,7 @@ p3cw = Py3CW(
 # tg_api_hash = str(config.get('telegram', 'hash'))
 
 
-def refresh_balances(account_id):
+def refresh_balances(account_id, forced_mode):
     '''
     Refresh the balance 3c has for the given exchange
     :param account_id: id of exchange account on 3c
@@ -124,8 +122,8 @@ def refresh_balances(account_id):
     error, _ = p3cw.request(
             entity='accounts',
             action='load_balances',
-            action_id=f'{account_id}',
-            additional_headers=additional_headers
+            action_id=str(account_id),
+            additional_headers={'Forced-Mode': forced_mode}
         )
 
     if error:
@@ -223,7 +221,7 @@ def notify_webhook(message, message_type: str):
     print(resp)
 
 
-def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json):
+def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json, forced_mode):
     '''
     Helper function to hit the 3c api and update the bot's bo and so
     :param account_id: account id the bot is on
@@ -260,7 +258,7 @@ def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json):
                 'max_active_deals': valid_mad,
                 'allowed_deals_on_same_pair': valid_adosp,
             },
-            additional_headers=additional_headers
+            additional_headers={'Forced-Mode': forced_mode}
         )
         if error == {}:
             info_message = f"{bot_json['name']} Updated!"
@@ -315,13 +313,12 @@ def get_currency(pair, strategy, volume_type):
     #     return _pair[1] if volume_type == 'quote_currency' else _pair[0]
     return _pair[0] if volume_type == 'quote_currency' else _pair[1]
 
-
-def get_config():
+def fetch_bots_for_accounts(account_config_dict, forced_mode):
     '''
-    Pulls necessary information from 3c api to generate config files
-    :return:
+    Function to gather all bots for accounts.
+    :param account_config_dict: config dict to carry all account/bot data
+    :param forced_mode: 'real' or 'paper' trading.
     '''
-    config_dict = {"accounts": {}}
     logging.debug('Pulling bot info...')
     ## Get list of all enabled bots to find out which accounts/currencies are needed to be optimized
     # infinite bots while loop
@@ -337,7 +334,7 @@ def get_config():
                 "limit": f"{bot_limit}",
                 "offset":f"{bot_offset}"
             },
-            additional_headers=additional_headers
+            additional_headers={'Forced-Mode': forced_mode}
         )
 
         if error:
@@ -374,18 +371,19 @@ def get_config():
             # If account not already in config_dict, add it
             account_id = bot['account_id']
 
-            if account_id not in config_dict['accounts']:
-                config_dict['accounts'][account_id] = {}
-                config_dict['accounts'][account_id]['account_name'] = bot['account_name']
-                config_dict['accounts'][account_id]['balances'] = {}
-                config_dict['accounts'][account_id]['bots'] = {}
+            if account_id not in account_config_dict['accounts']:
+                account_config_dict['accounts'][account_id] = {}
+                account_config_dict['accounts'][account_id]['forced_mode'] = forced_mode
+                account_config_dict['accounts'][account_id]['account_name'] = bot['account_name']
+                account_config_dict['accounts'][account_id]['balances'] = {}
+                account_config_dict['accounts'][account_id]['bots'] = {}
 
             bot_id = bot['id']
 
-            config_dict['accounts'][account_id]['bots'][bot_id] = {}
+            account_config_dict['accounts'][account_id]['bots'][bot_id] = {}
 
             # readibility short-cut
-            bot_config_dict = config_dict['accounts'][account_id]['bots'][bot_id]
+            bot_config_dict = account_config_dict['accounts'][account_id]['bots'][bot_id]
             # Add 3c settings
             bot_config_dict['name'] = bot['name']
             bot_config_dict['bo'] = bot['base_order_volume']
@@ -405,15 +403,15 @@ def get_config():
 
             # Get the currency used for the deal
             currency = get_currency(bot['pairs'][0], bot['strategy'], bot['base_order_volume_type'])
-            config_dict['accounts'][account_id]['bots'][bot_id]['currency'] = currency
+            account_config_dict['accounts'][account_id]['bots'][bot_id]['currency'] = currency
             # If currency not already in the account, add it
-            config_dict['accounts'][account_id]['balances'][currency] = 0.0
+            account_config_dict['accounts'][account_id]['balances'][currency] = 0.0
             # Add market code so we can look up currency limits for that exchange later
             error, account_info = p3cw.request(
                 entity='accounts',
                 action='account_info',
                 action_id=str(account_id),
-                additional_headers=additional_headers
+                additional_headers={'Forced-Mode': forced_mode}
             )
             if error:
                 notify_webhook(
@@ -426,11 +424,24 @@ def get_config():
 
             bot_config_dict['market_code'] = account_info['market_code']
 
+
+def get_config():
+    '''
+    Pulls necessary information from 3c api to generate config files
+    :return:
+    '''
+    config_dict = {"accounts": {}}
+    fetch_bots_for_accounts(account_config_dict=config_dict, forced_mode='real')
+    fetch_bots_for_accounts(account_config_dict=config_dict, forced_mode='paper')
+
     logging.debug('Pulling account balances...')
     # Get balance for every currency for each account
-    for account_id in config_dict['accounts']:
+    for account_id, account in config_dict['accounts'].items():
         # Refresh the balance 3c has for the exchange
-        refresh_balances(account_id)
+        forced_mode = account['forced_mode']
+
+        refresh_balances(account_id, forced_mode=forced_mode)
+
         error, account_balances = p3cw.request(
             entity='accounts',
             action='account_table_data',
@@ -438,7 +449,7 @@ def get_config():
             payload={
                 "account_id": account_id
             },
-            additional_headers=additional_headers
+            additional_headers={'Forced-Mode': forced_mode}
         )
 
         if error:
@@ -462,6 +473,8 @@ def get_config():
     for account_id in config_dict['accounts']:
         for bot_id in config_dict['accounts'][account_id]['bots']:
 
+            forced_mode = config_dict['accounts'][account_id]['forced_mode']
+            
             error, active_deals = p3cw.request(
                 entity='deals',
                 action='',
@@ -470,17 +483,20 @@ def get_config():
                     "scope": "active",
                     "bot_id": bot_id
                 },
-                additional_headers=additional_headers
+                additional_headers={'Forced-Mode': forced_mode}
             )
             if error:
                 print(error)
                 notify_webhook(
                     (
-                        'Error getting active deals for '
-                        f'[{account_id}](https://3commas.io/accounts/{account_id})'
+                        'Error getting active deals for:\n'
+                        f'Account: [{account_id}](https://3commas.io/accounts/{account_id})\n'
+                        f'Bot: [{bot_id}](https://3commas.io/bots/{bot_id})\n'
+                        f'Forced Mode: {forced_mode}'
                     ),
                     'ERROR'
                 )
+                continue
 
             for deal in active_deals:
                 currency_code = get_currency(
@@ -606,8 +622,16 @@ def check_user_config(bot_user_config):
                         f'risk factor of {allocation * 100}'
                     )
                     logging.warning(risk_factor_warning)
+
         # if there is a live bot that does not have a config in bots.json, break
         for account_id in bot_user_config['accounts']:
+            # If ingore other bots is active dont worry about checking other bots. 
+            # just use the bots that are there.
+           
+            if "ignore_other_bots" in user_config['accounts'][str(account_id)] and \
+                user_config['accounts'][str(account_id)]["ignore_other_bots"] is True:
+                continue
+
             for bot_id in bot_user_config['accounts'][account_id]['bots']:
                 if bot_id not in bot_ids:
                     notify_webhook(
@@ -622,7 +646,7 @@ def check_user_config(bot_user_config):
     return user_config
 
 
-def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals, bot_allow_same_pair_multiple):
+def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals, bot_same_pair_multiple, forced_mode):
     '''
     Helper function to find optimal bot settings and update 3c via api
     :param bot_id: 3c ID of the bot
@@ -636,11 +660,14 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
 
     # Get min BO and price step for currency on given exchange
     currency_limits = get_3c_currency_limit(bot_json)
-    bo = currency_limits[0]
+
     # Get ratio of BO:SO from bot settings
-    boso_ratio = float(bot_json['so']) / float(bot_json['bo'])
+    boso_ratio = float(bot_json['bo']) / float(bot_json['so'])
+    
+    bo = currency_limits[0] if boso_ratio <= 1 else currency_limits[0] * boso_ratio
     # Maintain ratio user has in their settings
-    so = bo * boso_ratio
+    so = bo / boso_ratio if boso_ratio <= 1 else currency_limits[0]
+    
     # Get minimum max_funds for bot settings to use as starting point
     mstc = int(bot_json['mstc']) # Max Safety Trades Count
     sos = float(bot_json['sos']) # Safety Order Scale
@@ -728,8 +755,8 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
     valid_bo = round(valid_bo, 8)
     valid_so = round(valid_so, 8)
     # Scale max allowed deals per pair based on mad
-    if bot_allow_same_pair_multiple:
-        valid_adosp = math.ceil(valid_mad / 19)
+    if bot_same_pair_multiple:
+        valid_adosp = math.ceil(valid_mad / bot_same_pair_multiple)
 
 
     if (
@@ -744,7 +771,7 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
             f'BO: {round(valid_bo, 8)}, SO: {round(valid_so, 8)}, MAD: {valid_mad}, ADOSP: {valid_adosp}'
         )
         logging.info(optimal_found_info)
-        update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json)
+        update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json, forced_mode=forced_mode)
     else:
         # Did not find newer settings
         no_optimal_found_info = (
@@ -776,6 +803,9 @@ def compounder_start():
                 bot_json = bot_config['accounts'][account_id]['bots'][bot_id]
                 bot_currency = bot_json['currency']
 
+                if bot_currency not in user_config['accounts'][str(account_id)]['currencies']:
+                    continue
+
                 # Print account balance
                 account_currency_balance_info = (
                     f"{bot_config['accounts'][account_id]['account_name']} "
@@ -795,7 +825,7 @@ def compounder_start():
                 bot_max_active_deals = 1 if not "max_active_deals" in user_conf_bot else user_conf_bot['max_active_deals']
 
                 # allow multiple deals with same pair
-                bot_allow_same_pair_multiple = False if not "allow_same_pair_multiple" in user_conf_bot else user_conf_bot['allow_same_pair_multiple']
+                bot_same_pair_multiple = False if not "bot_same_pair_multiple" in user_conf_bot else user_conf_bot['bot_same_pair_multiple']
 
                 max_currency_allocated = \
                     float(account_balances[bot_currency]) * float(bot_allocation)
@@ -812,7 +842,8 @@ def compounder_start():
                     bot_json=bot_json,
                     max_currency_allocated=max_currency_allocated,
                     bot_max_active_deals=bot_max_active_deals,
-                    bot_allow_same_pair_multiple=bot_allow_same_pair_multiple
+                    bot_same_pair_multiple=bot_same_pair_multiple,
+                    forced_mode=bot_config['accounts'][account_id]['forced_mode']
                 )
 #
 
@@ -825,7 +856,4 @@ def request_handler(event, lambda_context):
 
 if __name__ == "__main__":
 
-    # Startup telegram
-    # if not exists('/telegram/name.session'):
-    #     notify_webhook('TG Configured!', 'INFO')
     compounder_start()
