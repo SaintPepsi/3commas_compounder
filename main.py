@@ -474,7 +474,7 @@ def get_config():
         for bot_id in config_dict['accounts'][account_id]['bots']:
 
             forced_mode = config_dict['accounts'][account_id]['forced_mode']
-            
+
             error, active_deals = p3cw.request(
                 entity='deals',
                 action='',
@@ -483,13 +483,12 @@ def get_config():
                     "scope": "active",
                     "bot_id": bot_id
                 },
-                additional_headers={'Forced-Mode': forced_mode}
             )
             if error:
                 print(error)
-                if LOCAL is 'False' and forced_mode is 'paper':
+                if LOCAL == 'False' and forced_mode == 'paper':
                     continue
-                
+
                 notify_webhook(
                     (
                         'Error getting active deals for:\n'
