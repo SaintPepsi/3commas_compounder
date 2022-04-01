@@ -3,14 +3,22 @@
 '''
 
 import math
-import logging
 import json
 import configparser
+
 from os.path import exists
-from py3cw.request import Py3CW
-import requests
+
 # AWS
 import boto3
+
+# Misc
+from py3cw.request import Py3CW
+
+# Local packages
+import logger
+import utils
+import webhook
+
 
 # Parse/Read config.ini
 config = configparser.ConfigParser()
@@ -20,8 +28,8 @@ try:
     # Try to get config.ini if it's present then we can assume we are running locally.
     config.read('config.ini')
     test_mode = config.get('run_mode', 'test')
-    LOCAL = 'True'
     BOTS_CONFIG_LOCATION = 'bot_config/bots.json'
+    LOCAL = 'True'
 
 except configparser.NoSectionError:
     # If config.ini run_mode doesn't work:
@@ -33,20 +41,6 @@ except configparser.NoSectionError:
     with open(BOTS_CONFIG_LOCATION, 'wb') as f:
         boto3.client('s3').download_fileobj('3commas-compounder-data-bucket', 'bots.json', f)
     LOCAL = 'False'
-
-
-
-def parameter_dict_getter(_secret_parameters_result):
-    '''
-    get the parameters from the System Manager and create a dict for easy access
-    :param _secret_parameters_result: boto get_parameters result object
-    :return: secrets_dict with last value after the slash as key
-    '''
-    constructed_secrets_dict = {}
-    for params in _secret_parameters_result["Parameters"]:
-        value_key = params["Name"].rsplit("/", maxsplit=1)[1]
-        constructed_secrets_dict[value_key] = params["Value"]
-    return constructed_secrets_dict
 
 
 # Check if local or AWS
@@ -63,37 +57,13 @@ else:
     secret_parameters = [
         "/3commas-compounder/3commas_key",
         "/3commas-compounder/3commas_secret",
-        "/3commas-compounder/webhook_url",
     ]
 
     secret_parameters_result = boto_client.get_parameters(
         Names=secret_parameters,
         WithDecryption=True,
     )
-    secrets_dict = parameter_dict_getter(secret_parameters_result)
-
-
-if len(logging.getLogger().handlers) > 0:
-    # The Lambda environment pre-configures a handler logging to stderr.
-    # If a handler is already configured,
-    # `.basicConfig` does not execute. Thus we set the level directly.
-    logging.getLogger().setLevel(logging.INFO)
-else:
-    logger = logging.getLogger(__name__)
-    # Write to logfile
-    logging.basicConfig(level=logging.INFO,
-                        filename='logs/3commas_compounder.log',
-                        filemode='a',
-                        format=(
-                            '%(asctime)s.%(msecs)03d '
-                            '%(levelname)s %(module)s - '
-                            '%(funcName)s: %(message)s'
-                        ),
-                        datefmt='%d-%m-%Y %H:%M:%S'
-                        )
-    # Also print in console
-    logging.getLogger().addHandler(logging.StreamHandler())
-
+    secrets_dict = utils.parameter_dict_getter(secret_parameters_result)
 
 
 # connect 3commas python wrapper
@@ -107,11 +77,6 @@ p3cw = Py3CW(
         secret=secrets_dict["3commas_secret"],
         request_options=py3cw_request_options
     )
-
-# Get telegram API ID + HASH from telegram API Development Tools
-# tg_api_id = str(config.get('telegram', 'id'))
-# tg_api_hash = str(config.get('telegram', 'hash'))
-
 
 def refresh_balances(account_id, forced_mode):
     '''
@@ -127,7 +92,7 @@ def refresh_balances(account_id, forced_mode):
         )
 
     if error:
-        notify_webhook(error, 'ERROR')
+        webhook.notify_webhook(error, 'ERROR')
 
 
 def get_3c_currency_limit(bot_json):
@@ -151,7 +116,7 @@ def get_3c_currency_limit(bot_json):
     )
 
     if error:
-        notify_webhook(error, 'ERROR')
+        webhook.notify_webhook(error, 'ERROR')
 
     # This 3c Endpoint will not work when using short bots
     # because those pairs (i.e ETH_USD) may not exist on the exchange
@@ -168,59 +133,6 @@ def get_3c_currency_limit(bot_json):
     return (float(pair_limits['minTotal']), float(pair_limits['priceStep']))
 
 
-MESSAGE_TYPE_EMOJI = {
-    'INFO': '📣',
-    'WARNING': '⚠️',
-    'ERROR': '⛔'
-}
-
-MESSAGE_TYPE_COLOR = {
-    'INFO': 3447003,
-    'WARNING': 16776960,
-    'ERROR': 15158332
-}
-MESSAGE_TYPE_LOGGING = {
-    'INFO': logging.info,
-    'WARNING': logging.warning,
-    'ERROR': logging.error
-}
-
-TEST_MODE_MESSAGE_DICT = {
-    "False": " - ⚖️",
-    "True": " - 🔧👷‍♂️🚧🏗️"
-}
-
-def notify_webhook(message, message_type: str):
-    '''
-    Helper function to send error messages to telegram
-    :param message: message to send to webhook
-    :param message_type: INFO, WARNING, ERROR
-    :param real_signal: boolean
-    :return:
-    '''
-
-    # log a message based on warning level
-    MESSAGE_TYPE_LOGGING[message_type](message)
-
-    if "webhook_url" not in secrets_dict:
-        return
-
-    discord_message = {
-        'embeds': [
-            {
-                "title": (
-                    f'{MESSAGE_TYPE_EMOJI[message_type]} Compounder '
-                    f'{message_type}{TEST_MODE_MESSAGE_DICT[LOCAL]}'
-                ),
-                "color": MESSAGE_TYPE_COLOR[message_type],
-                "description": message
-            }
-        ]
-    }
-    resp = requests.post(secrets_dict["webhook_url"], json=discord_message)
-    print(resp)
-
-
 def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json, forced_mode):
     '''
     Helper function to hit the 3c api and update the bot's bo and so
@@ -233,12 +145,12 @@ def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json, for
     '''
 
     if test_mode == 'True':
-        logging.info("Test Run Completed!")
+        logger.log("Test Run Completed!", "INFO")
     else:
         error, updated_bot = p3cw.request(
             entity='bots',
             action='update',
-            action_id=f'{bot_id}',
+            action_id=str(bot_id),
             payload={
                 'name': bot_json['name'],
                 'pairs': bot_json['pairs'],
@@ -262,11 +174,11 @@ def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json, for
         )
         if error == {}:
             info_message = f"{bot_json['name']} Updated!"
-            logging.info(info_message)
+            logger.log(info_message, "INFO")
             debug_updated_bot = f"{updated_bot}"
-            logging.debug(debug_updated_bot)
+            logger.log(debug_updated_bot, "INFO")
         else:
-            notify_webhook(f"{bot_json['name']} NOT completed:\n{error['msg']}", 'ERROR')
+            webhook.notify_webhook(f"{bot_json['name']} NOT completed:\n{error['msg']}", 'ERROR')
 
 
 def calc_max_funds_per_deal(
@@ -319,12 +231,14 @@ def fetch_bots_for_accounts(account_config_dict, forced_mode):
     :param account_config_dict: config dict to carry all account/bot data
     :param forced_mode: 'real' or 'paper' trading.
     '''
-    logging.debug('Pulling bot info...')
+    logger.log('Pulling bot info...', "INFO")
     ## Get list of all enabled bots to find out which accounts/currencies are needed to be optimized
     # infinite bots while loop
     bot_offset = 0
     bot_limit = 100
+
     keep_fetching_bots = True
+
     while keep_fetching_bots:
         error, bots = p3cw.request(
             entity='bots',
@@ -338,7 +252,7 @@ def fetch_bots_for_accounts(account_config_dict, forced_mode):
         )
 
         if error:
-            notify_webhook(error, 'ERROR')
+            webhook.notify_webhook(error, 'ERROR')
 
         # No more bots or less than needed for an additional loop.
         if len(bots) == 0 or len(bots) < 100:
@@ -350,22 +264,22 @@ def fetch_bots_for_accounts(account_config_dict, forced_mode):
         for bot in bots:
             # Only support long bots that buy in quote and short bots that sell in base
             if (
-                bot['strategy'] == 'long' and 
+                bot['strategy'] == 'long' and
                 (
-                    bot['base_order_volume_type'] != 'quote_currency' or 
+                    bot['base_order_volume_type'] != 'quote_currency' or
                     bot['safety_order_volume_type'] != 'quote_currency'
                 )
             ) or (
-                bot['strategy'] == 'short' and 
+                bot['strategy'] == 'short' and
                 (
-                    bot['base_order_volume_type'] != 'base_currency' or 
+                    bot['base_order_volume_type'] != 'base_currency' or
                     bot['safety_order_volume_type'] != 'base_currency'
                 )
             ):
                 bot_support_warning = (
                     'Only Long Quote and Short Base bots are supported. '
                     f'Skipping {bot["name"]}')
-                logging.warning(bot_support_warning)
+                logger.log(bot_support_warning, "WARNING")
                 continue
 
             # If account not already in config_dict, add it
@@ -404,8 +318,10 @@ def fetch_bots_for_accounts(account_config_dict, forced_mode):
             # Get the currency used for the deal
             currency = get_currency(bot['pairs'][0], bot['strategy'], bot['base_order_volume_type'])
             account_config_dict['accounts'][account_id]['bots'][bot_id]['currency'] = currency
+
             # If currency not already in the account, add it
             account_config_dict['accounts'][account_id]['balances'][currency] = 0.0
+
             # Add market code so we can look up currency limits for that exchange later
             error, account_info = p3cw.request(
                 entity='accounts',
@@ -414,7 +330,7 @@ def fetch_bots_for_accounts(account_config_dict, forced_mode):
                 additional_headers={'Forced-Mode': forced_mode}
             )
             if error:
-                notify_webhook(
+                webhook.notify_webhook(
                     (
                         f'Error getting account info for [{bot["account_name"]}]'
                         f'(https://3commas.io/accounts/{bot["account_id"]})'
@@ -434,7 +350,8 @@ def get_config():
     fetch_bots_for_accounts(account_config_dict=config_dict, forced_mode='real')
     fetch_bots_for_accounts(account_config_dict=config_dict, forced_mode='paper')
 
-    logging.debug('Pulling account balances...')
+    logger.log('Pulling account balances...', "INFO")
+
     # Get balance for every currency for each account
     for account_id, account in config_dict['accounts'].items():
         # Refresh the balance 3c has for the exchange
@@ -454,7 +371,7 @@ def get_config():
 
         if error:
             print(error)
-            notify_webhook(
+            webhook.notify_webhook(
                 (
                     'Error getting account table data for '
                     f'[{account_id}](https://3commas.io/accounts/{account_id})'
@@ -485,11 +402,11 @@ def get_config():
                 },
             )
             if error:
-                print(error)
+                logger.log(str(error), "ERROR")
                 if LOCAL == 'False' and forced_mode == 'paper':
                     continue
 
-                notify_webhook(
+                webhook.notify_webhook(
                     (
                         'Error getting active deals for:\n'
                         f'Account: [{account_id}](https://3commas.io/accounts/{account_id})\n'
@@ -576,7 +493,7 @@ def check_user_config(bot_user_config):
     if not file_exists:
         if LOCAL == 'True':
             create_user_config(bot_user_config)
-            notify_webhook(
+            webhook.notify_webhook(
                 (
                     f'Could not find a `bots.json` in {BOTS_CONFIG_LOCATION}, '
                     'please populate the newly created file.'
@@ -584,7 +501,7 @@ def check_user_config(bot_user_config):
                 'ERROR'
             )
         else:
-            notify_webhook(
+            webhook.notify_webhook(
                 (
                     f'Could not find a `bots.json` in {BOTS_CONFIG_LOCATION}, '
                     'please check s3 file download.'
@@ -609,7 +526,7 @@ def check_user_config(bot_user_config):
                         'allocation']
                     bot_name = user_config_account['currencies'][currency][bot_id]['bot_name']
                     if not bot_allocation:
-                        notify_webhook(
+                        webhook.notify_webhook(
                             (
                                 f'{account_name} "{bot_name}" does not have an allocation defined'
                             ),
@@ -623,20 +540,20 @@ def check_user_config(bot_user_config):
                         f'{account_name} {currency} has a '
                         f'risk factor of {allocation * 100}'
                     )
-                    logging.warning(risk_factor_warning)
+                    logger.log(risk_factor_warning, "WARNING")
 
         # if there is a live bot that does not have a config in bots.json, break
         for account_id in bot_user_config['accounts']:
-            # If ingore other bots is active dont worry about checking other bots. 
+            # If ingore other bots is active dont worry about checking other bots.
             # just use the bots that are there.
-           
+
             if "ignore_other_bots" in user_config['accounts'][str(account_id)] and \
                 user_config['accounts'][str(account_id)]["ignore_other_bots"] is True:
                 continue
 
             for bot_id in bot_user_config['accounts'][account_id]['bots']:
                 if bot_id not in bot_ids:
-                    notify_webhook(
+                    webhook.notify_webhook(
                         (
                             "bots.json is missing new bots. "
                             f"[{bot_id}](https://3commas.io/bots/{bot_id}) \n"
@@ -648,7 +565,14 @@ def check_user_config(bot_user_config):
     return user_config
 
 
-def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals, bot_same_pair_multiple, forced_mode):
+def optimize_bot(
+        bot_id,
+        bot_json,
+        max_currency_allocated,
+        bot_max_active_deals,
+        bot_same_pair_multiple,
+        forced_mode
+    ):
     '''
     Helper function to find optimal bot settings and update 3c via api
     :param bot_id: 3c ID of the bot
@@ -657,7 +581,7 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
     :return:
     '''
     max_currency_allocation_info = f'max_currency_allocated: {max_currency_allocated}'
-    logging.info(max_currency_allocation_info)
+    logger.log(max_currency_allocation_info, "INFO")
 
 
     # Get min BO and price step for currency on given exchange
@@ -665,16 +589,17 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
 
     # Get ratio of BO:SO from bot settings
     boso_ratio = float(bot_json['bo']) / float(bot_json['so'])
-    
+
     bo = currency_limits[0] if boso_ratio <= 1 else currency_limits[0] * boso_ratio
     # Maintain ratio user has in their settings
     so = bo / boso_ratio if boso_ratio <= 1 else currency_limits[0]
-    
+
     # Get minimum max_funds for bot settings to use as starting point
     mstc = int(bot_json['mstc']) # Max Safety Trades Count
     sos = float(bot_json['sos']) # Safety Order Scale
     os = float(bot_json['os']) # Order Scale
     ss = float(bot_json['ss']) # Safety Scale
+
     max_funds_per_deal = calc_max_funds_per_deal(bo=bo, so=so, mstc=mstc, sos=sos, os=os, ss=ss)
 
     valid_bo = bo
@@ -689,9 +614,9 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
     floor_max_deals = math.floor(potential_max_deals)
 
     bot_type_info = f'bot_type: {bot_type}'
-    logging.info(bot_type_info)
+    logger.log(bot_type_info, "INFO")
     floor_max_deals_info = f'floor_max_deals: {floor_max_deals}'
-    logging.info(floor_max_deals_info)
+    logger.log(floor_max_deals_info, "INFO")
 
     # Make sure the bot can actually use 1 or more deals
     if floor_max_deals >= 1:
@@ -727,15 +652,15 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
                 valid_mad = floor_max_deals
 
             remainig_deal_space_info = f'remainig_deal_space {remainig_deal_space}'
-            logging.info(remainig_deal_space_info)
+            logger.log(remainig_deal_space_info, "INFO")
 
             deal_bo_so_increase_info = f'deal_bo_so_increase {deal_bo_so_increase}'
-            logging.info(deal_bo_so_increase_info)
+            logger.log(deal_bo_so_increase_info, "INFO")
         elif bot_type == "Bot::SingleBot":
             valid_bo = bo * potential_max_deals
             valid_so = so * potential_max_deals
     else:
-        notify_webhook(
+        webhook.notify_webhook(
             (
                 f'Not enough funds for 1 active deal, '
                 'using minimum bo:so for bot: '
@@ -747,11 +672,11 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
     max_funds_per_deal_new_size = \
         calc_max_funds_per_deal(bo=valid_bo, so=valid_so, mstc=mstc, sos=sos, os=os, ss=ss)
     max_funds_per_deal_new_size_info = f'max_funds_per_deal_new_size: {max_funds_per_deal_new_size}'
-    logging.info(max_funds_per_deal_new_size_info)
+    logger.log(max_funds_per_deal_new_size_info, "INFO")
 
     total_funds_used_by_bot = max_funds_per_deal_new_size * valid_mad
     total_funds_used_by_bot_info = f'total_funds_used_by_bot: {total_funds_used_by_bot}'
-    logging.info(total_funds_used_by_bot_info)
+    logger.log(total_funds_used_by_bot_info, "INFO")
 
     # Round to max 8 the bo:so
     valid_bo = round(valid_bo, 8)
@@ -770,17 +695,27 @@ def optimize_bot(bot_id, bot_json, max_currency_allocated, bot_max_active_deals,
         # Only Send api requests to 3c to update the bot if the data is different than what it was.
         optimal_found_info = (
             f'Optimal settings for {bot_json["name"]} ({bot_id}) found! '
-            f'BO: {round(valid_bo, 8)}, SO: {round(valid_so, 8)}, MAD: {valid_mad}, ADOSP: {valid_adosp}'
+            f'BO: {round(valid_bo, 8)}, SO: {round(valid_so, 8)}, '
+            f'MAD: {valid_mad}, ADOSP: {valid_adosp}'
         )
-        logging.info(optimal_found_info)
-        update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json, forced_mode=forced_mode)
+        logger.log(optimal_found_info, "INFO")
+
+        update_bot(
+            bot_id,
+            valid_bo,
+            valid_so,
+            valid_mad,
+            valid_adosp,
+            bot_json,
+            forced_mode=forced_mode
+        )
     else:
         # Did not find newer settings
         no_optimal_found_info = (
             'Could not find new optimal settings for '
             f'{bot_json["name"]} ({bot_id}).'
         )
-        logging.info(no_optimal_found_info)
+        logger.log(no_optimal_found_info, "INFO")
 
 
 
@@ -794,7 +729,7 @@ def compounder_start():
     user_config = check_user_config(bot_config)
     # If configs are good, update bots
     if user_config:
-        logging.info('Valid config found, proceeding to update bots...')
+        logger.log('Valid config found, proceeding to update bots...', "INFO")
         # Update the bots
         for account_id in bot_config['accounts']:
             # Get account balances
@@ -813,7 +748,7 @@ def compounder_start():
                     f"{bot_config['accounts'][account_id]['account_name']} "
                     f"{bot_currency} balance: {account_balances[bot_currency]}"
                 )
-                logging.info(account_currency_balance_info)
+                logger.log(account_currency_balance_info, "INFO")
 
                 # Get the allocation for the bot from user_config
                 user_conf_bot = user_config['accounts']\
@@ -824,10 +759,14 @@ def compounder_start():
 
                 bot_allocation = user_conf_bot['allocation']
                 # check if bot has Max active deal, if it does use it otherwise set it to 1
-                bot_max_active_deals = 1 if not "max_active_deals" in user_conf_bot else user_conf_bot['max_active_deals']
+                bot_max_active_deals = 1 \
+                    if not "max_active_deals" in user_conf_bot \
+                    else user_conf_bot['max_active_deals']
 
                 # allow multiple deals with same pair
-                bot_same_pair_multiple = False if not "bot_same_pair_multiple" in user_conf_bot else user_conf_bot['bot_same_pair_multiple']
+                bot_same_pair_multiple = False \
+                    if not "bot_same_pair_multiple" in user_conf_bot \
+                    else user_conf_bot['bot_same_pair_multiple']
 
                 max_currency_allocated = \
                     float(account_balances[bot_currency]) * float(bot_allocation)
@@ -836,7 +775,7 @@ def compounder_start():
                     "Allocation allowed: "
                     f"{max_currency_allocated} {bot_currency}"
                 )
-                logging.info(allocation_allowance_info)
+                logger.log(allocation_allowance_info, "INFO")
 
                 # Pass the settings to optimize function to find optimal BO:SO for allocation
                 optimize_bot(
