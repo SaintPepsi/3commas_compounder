@@ -70,7 +70,7 @@ else:
 py3cw_request_options = {
         'request_timeout': 10,
         'nr_of_retries': 1,
-        'retry_status_codes': [502]
+        'retry_status_codes': [502, 429]
     }
 p3cw = Py3CW(
         key=secrets_dict["3commas_key"],
@@ -85,15 +85,20 @@ def refresh_balances(account_id, forced_mode):
     :return:
     '''
     error, _ = p3cw.request(
-            entity='accounts',
-            action='load_balances',
-            action_id=str(account_id),
-            additional_headers={'Forced-Mode': forced_mode}
-        )
+        entity='accounts',
+        action='load_balances',
+        action_id=str(account_id),
+        additional_headers={'Forced-Mode': forced_mode}
+    )
 
     if error:
         webhook.notify_webhook(error, 'ERROR')
 
+currency_limit_adjuster = {
+    "BTC": 0.0003,
+    "BUSD": 15,
+    "USDT": 15
+}
 
 def get_3c_currency_limit(bot_json):
     '''
@@ -129,8 +134,18 @@ def get_3c_currency_limit(bot_json):
     if bot_json['currency'] != coins[0]:
         return (.001, .0001)
 
-    # return (float(pair_limits['minTotal']), float(pair_limits['lotStep']))
-    return (float(pair_limits['minTotal']), float(pair_limits['priceStep']))
+
+    min_total = float(pair_limits['minTotal'])
+
+    logger.log(f"bot_json['pairs'] {bot_json['pairs']}", "INFO")
+    logger.log(f"min_total {min_total}", "INFO")
+
+    if coins[0] in currency_limit_adjuster:
+        currency_minimal = currency_limit_adjuster[coins[0]]
+        if min_total < currency_minimal:
+            return currency_minimal
+
+    return min_total
 
 
 def update_bot(bot_id, valid_bo, valid_so, valid_mad, valid_adosp, bot_json, forced_mode):
@@ -411,6 +426,7 @@ def get_config():
                         'Error getting active deals for:\n'
                         f'Account: [{account_id}](https://3commas.io/accounts/{account_id})\n'
                         f'Bot: [{bot_id}](https://3commas.io/bots/{bot_id})\n'
+                        f'Error code: [{error["status_code"]}]\n'
                         f'Forced Mode: {forced_mode}'
                     ),
                     'ERROR'
@@ -585,25 +601,35 @@ def optimize_bot(
 
 
     # Get min BO and price step for currency on given exchange
-    currency_limits = get_3c_currency_limit(bot_json)
+    min_volume = get_3c_currency_limit(bot_json)
+
+    logger.log(f"min_volume {min_volume}", "INFO")
+
 
     # Get ratio of BO:SO from bot settings
     boso_ratio = float(bot_json['bo']) / float(bot_json['so'])
 
-    bo = currency_limits[0] if boso_ratio <= 1 else currency_limits[0] * boso_ratio
+    buy_order = min_volume if boso_ratio <= 1 else min_volume * boso_ratio
     # Maintain ratio user has in their settings
-    so = bo / boso_ratio if boso_ratio <= 1 else currency_limits[0]
+    safety_order = buy_order / boso_ratio if boso_ratio <= 1 else min_volume
 
     # Get minimum max_funds for bot settings to use as starting point
     mstc = int(bot_json['mstc']) # Max Safety Trades Count
     sos = float(bot_json['sos']) # Safety Order Scale
-    os = float(bot_json['os']) # Order Scale
-    ss = float(bot_json['ss']) # Safety Scale
+    order_scale = float(bot_json['os']) # Order Scale
+    safety_scale = float(bot_json['ss']) # Safety Scale
 
-    max_funds_per_deal = calc_max_funds_per_deal(bo=bo, so=so, mstc=mstc, sos=sos, os=os, ss=ss)
+    max_funds_per_deal = calc_max_funds_per_deal(
+        bo=buy_order,
+        so=safety_order,
+        mstc=mstc,
+        sos=sos,
+        os=order_scale,
+        ss=safety_scale
+    )
 
-    valid_bo = bo
-    valid_so = so
+    valid_bo = buy_order
+    valid_so = safety_order
     valid_mad = 1
     valid_adosp = 1
 
@@ -633,8 +659,8 @@ def optimize_bot(
 
                 deal_bo_so_increase = remainig_deal_space / bot_max_active_deals
 
-                valid_bo += bo * deal_bo_so_increase
-                valid_so += so * deal_bo_so_increase
+                valid_bo += buy_order * deal_bo_so_increase
+                valid_so += safety_order * deal_bo_so_increase
                 valid_mad = bot_max_active_deals
             else:
                 # we are still under max active deals (6)
@@ -647,8 +673,8 @@ def optimize_bot(
 
                 deal_bo_so_increase = remainig_deal_space / floor_max_deals
 
-                valid_bo += bo * deal_bo_so_increase
-                valid_so += so * deal_bo_so_increase
+                valid_bo += buy_order * deal_bo_so_increase
+                valid_so += safety_order * deal_bo_so_increase
                 valid_mad = floor_max_deals
 
             remainig_deal_space_info = f'remainig_deal_space {remainig_deal_space}'
@@ -657,8 +683,8 @@ def optimize_bot(
             deal_bo_so_increase_info = f'deal_bo_so_increase {deal_bo_so_increase}'
             logger.log(deal_bo_so_increase_info, "INFO")
         elif bot_type == "Bot::SingleBot":
-            valid_bo = bo * potential_max_deals
-            valid_so = so * potential_max_deals
+            valid_bo = buy_order * potential_max_deals
+            valid_so = safety_order * potential_max_deals
     else:
         webhook.notify_webhook(
             (
@@ -670,7 +696,7 @@ def optimize_bot(
         )
 
     max_funds_per_deal_new_size = \
-        calc_max_funds_per_deal(bo=valid_bo, so=valid_so, mstc=mstc, sos=sos, os=os, ss=ss)
+        calc_max_funds_per_deal(bo=valid_bo, so=valid_so, mstc=mstc, sos=sos, os=order_scale, ss=safety_scale)
     max_funds_per_deal_new_size_info = f'max_funds_per_deal_new_size: {max_funds_per_deal_new_size}'
     logger.log(max_funds_per_deal_new_size_info, "INFO")
 
