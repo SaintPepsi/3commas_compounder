@@ -28,3 +28,5 @@ Github secrets:
 ### How to use
 `git clone` this repo. 
 `cd` into working directory `pipenv shell` > `pip install -r requirements.txt`
+
+Added ignore_other_bots to real accounts. for some reason the lambda doesn't grab the updated bots.json when uploading only that file
