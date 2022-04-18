@@ -95,9 +95,9 @@ def refresh_balances(account_id, forced_mode):
         webhook.notify_webhook(error, 'ERROR')
 
 currency_limit_adjuster = {
-    "BTC": 0.0003,
-    "BUSD": 15,
-    "USDT": 15
+    "BTC": 0.00015,
+    "BUSD": 11,
+    "USDT": 11
 }
 
 def get_3c_currency_limit(bot_json):
