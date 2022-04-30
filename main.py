@@ -24,6 +24,8 @@ import webhook
 config = configparser.ConfigParser()
 additional_headers={'Forced-Mode': 'real'}
 
+
+# need to make this os.getenv
 try:
     # Try to get config.ini if it's present then we can assume we are running locally.
     config.read('config.ini')
@@ -70,7 +72,7 @@ else:
 py3cw_request_options = {
         'request_timeout': 10,
         'nr_of_retries': 1,
-        'retry_status_codes': [502, 429]
+        'retry_status_codes': [502]
     }
 p3cw = Py3CW(
         key=secrets_dict["3commas_key"],
@@ -385,7 +387,7 @@ def get_config():
         )
 
         if error:
-            print(error)
+            # print(error)
             webhook.notify_webhook(
                 (
                     'Error getting account table data for '
@@ -559,6 +561,7 @@ def check_user_config(bot_user_config):
                     logger.log(risk_factor_warning, "WARNING")
 
         # if there is a live bot that does not have a config in bots.json, break
+        # print("bot_user_config['accounts']",bot_user_config['accounts'])
         for account_id in bot_user_config['accounts']:
             # If ingore other bots is active dont worry about checking other bots.
             # just use the bots that are there.
@@ -753,6 +756,7 @@ def compounder_start():
     bot_config = get_config()
     # Compare 3c live configs against user config (bots.json)
     user_config = check_user_config(bot_config)
+
     # If configs are good, update bots
     if user_config:
         logger.log('Valid config found, proceeding to update bots...', "INFO")
@@ -766,7 +770,13 @@ def compounder_start():
                 bot_json = bot_config['accounts'][account_id]['bots'][bot_id]
                 bot_currency = bot_json['currency']
 
-                if bot_currency not in user_config['accounts'][str(account_id)]['currencies']:
+                config_account = user_config['accounts'][str(account_id)]
+                if bot_currency not in config_account['currencies']:
+                    continue
+                
+                if str(bot_id) not in config_account['currencies'][bot_currency]:
+                    print("config_account['currencies'][bot_currency]", config_account['currencies'][bot_currency])
+                    print('bot_id', bot_id)
                     continue
 
                 # Print account balance
@@ -776,12 +786,9 @@ def compounder_start():
                 )
                 logger.log(account_currency_balance_info, "INFO")
 
+
                 # Get the allocation for the bot from user_config
-                user_conf_bot = user_config['accounts']\
-                    [f'{account_id}']\
-                    ['currencies']\
-                    [bot_currency]\
-                    [f'{bot_id}']
+                user_conf_bot = config_account['currencies'][bot_currency][str(bot_id)]
 
                 bot_allocation = user_conf_bot['allocation']
                 # check if bot has Max active deal, if it does use it otherwise set it to 1
@@ -802,6 +809,8 @@ def compounder_start():
                     f"{max_currency_allocated} {bot_currency}"
                 )
                 logger.log(allocation_allowance_info, "INFO")
+
+
 
                 # Pass the settings to optimize function to find optimal BO:SO for allocation
                 optimize_bot(
