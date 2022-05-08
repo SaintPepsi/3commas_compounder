@@ -773,7 +773,7 @@ def compounder_start():
                 config_account = user_config['accounts'][str(account_id)]
                 if bot_currency not in config_account['currencies']:
                     continue
-                
+
                 if str(bot_id) not in config_account['currencies'][bot_currency]:
                     print("config_account['currencies'][bot_currency]", config_account['currencies'][bot_currency])
                     print('bot_id', bot_id)
