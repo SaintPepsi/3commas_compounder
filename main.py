@@ -821,7 +821,7 @@ def compounder_start():
                     bot_same_pair_multiple=bot_same_pair_multiple,
                     forced_mode=bot_config['accounts'][account_id]['forced_mode']
                 )
-#
+
 
 def request_handler(event, lambda_context):
     '''
