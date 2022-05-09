@@ -699,7 +699,14 @@ def optimize_bot(
         )
 
     max_funds_per_deal_new_size = \
-        calc_max_funds_per_deal(bo=valid_bo, so=valid_so, mstc=mstc, sos=sos, os=order_scale, ss=safety_scale)
+        calc_max_funds_per_deal(
+            bo=valid_bo,
+            so=valid_so,
+            mstc=mstc,
+            sos=sos,
+            os=order_scale,
+            ss=safety_scale
+        )
     max_funds_per_deal_new_size_info = f'max_funds_per_deal_new_size: {max_funds_per_deal_new_size}'
     logger.log(max_funds_per_deal_new_size_info, "INFO")
 
@@ -713,7 +720,6 @@ def optimize_bot(
     # Scale max allowed deals per pair based on mad
     if bot_same_pair_multiple:
         valid_adosp = math.ceil(valid_mad / bot_same_pair_multiple)
-
 
     if (
         float(bot_json['bo']) != valid_bo or
@@ -821,7 +827,6 @@ def compounder_start():
                     bot_same_pair_multiple=bot_same_pair_multiple,
                     forced_mode=bot_config['accounts'][account_id]['forced_mode']
                 )
-
 
 def request_handler(event, lambda_context):
     '''
