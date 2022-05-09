@@ -707,6 +707,7 @@ def optimize_bot(
             os=order_scale,
             ss=safety_scale
         )
+
     max_funds_per_deal_new_size_info = f'max_funds_per_deal_new_size: {max_funds_per_deal_new_size}'
     logger.log(max_funds_per_deal_new_size_info, "INFO")
 
