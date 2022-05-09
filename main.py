@@ -708,6 +708,7 @@ def optimize_bot(
             ss=safety_scale
         )
 
+    # max funds per deal size info text
     max_funds_per_deal_new_size_info = f'max_funds_per_deal_new_size: {max_funds_per_deal_new_size}'
     logger.log(max_funds_per_deal_new_size_info, "INFO")
 
