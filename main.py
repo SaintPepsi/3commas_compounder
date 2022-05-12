@@ -357,6 +357,67 @@ def fetch_bots_for_accounts(account_config_dict, forced_mode):
 
             bot_config_dict['market_code'] = account_info['market_code']
 
+def get_active_bot_deals(bot_id: int):
+    """Gets active bot deals"""
+    error, deals_data = p3cw.request(
+        entity="deals",
+        action="",
+        payload={
+            "scope": "active",
+            "limit": 1000,
+            "bot_id": str(bot_id),
+        },
+    )
+    return deals_data
+
+def get_sold_volume_for_bot(bot_id):
+    """Calculates sold volume for all bot deals"""
+    sold_volume: float = 0
+    deals_data = get_active_bot_deals(bot_id=bot_id)
+    for deal in deals_data:
+        sold_volume += float(deal['sold_volume'])
+
+    return sold_volume
+
+def get_short_bots_and_remove_sold_volume_from_account_config(config_dict):
+    """Remove sold volume from config_dict_account_balances"""
+    for account_id in config_dict['accounts']:
+        forced_mode = config_dict['accounts'][account_id]['forced_mode']
+        bot_offset = 0
+        bot_limit = 100
+
+        keep_fetching_bots = True
+        while keep_fetching_bots:
+            error, bots = p3cw.request(
+                entity='bots',
+                action='',
+                payload={
+                    "scope": "enabled",
+                    "limit": bot_limit,
+                    "offset": bot_offset,
+                    "strategy": "short",
+                    "account_id": str(account_id)
+                },
+                additional_headers={'Forced-Mode': forced_mode}
+            )
+
+            if error:
+                webhook.notify_webhook(error, 'ERROR')
+
+            # No more bots or less than needed for an additional loop.
+            if len(bots) == 0 or len(bots) < 100:
+                keep_fetching_bots = False
+            else:
+                # Potentially more bots avaialable.
+                bot_offset += bot_limit
+
+            for bot in bots:
+                sold_volume = get_sold_volume_for_bot(bot_id = bot['id'])
+                config_dict_account_balances = \
+                    config_dict['accounts'][account_id]['balances']
+                currency_code = bot['pairs'][0].split("_")[0]
+                if currency_code in config_dict_account_balances:
+                    config_dict_account_balances[currency_code] -= sold_volume
 
 def get_config():
     '''
@@ -449,6 +510,8 @@ def get_config():
                     }
                     strat_key = currency_amount[deal['strategy']]
                     config_dict_account_balances[currency_code] += float(deal[strat_key])
+
+    get_short_bots_and_remove_sold_volume_from_account_config(config_dict)
 
     return config_dict
 
@@ -762,6 +825,7 @@ def compounder_start():
     '''
     # Get bot configs from 3c
     bot_config = get_config()
+
     # Compare 3c live configs against user config (bots.json)
     user_config = check_user_config(bot_config)
 
