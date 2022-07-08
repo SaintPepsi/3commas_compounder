@@ -496,6 +496,7 @@ def get_config():
                 )
                 continue
 
+            # Check for each active deal the currency amount 
             for deal in active_deals:
                 currency_code = get_currency(
                     deal['pair'],
